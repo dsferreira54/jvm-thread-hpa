@@ -1,16 +1,30 @@
 # Custom Metrics Autoscaler (KEDA) — operador Red Hat no OpenShift.
 # O ScaledObject em keda-jvm-threads.yaml depende deste operador.
+#
+# Sync waves (todos os manifestos em raw/):
+#   0 — Namespaces, Application grafana
+#   1 — OperatorGroup, ServiceAccount/RBAC KEDA
+#   2 — Subscription, ImageStream, BuildConfig
+#   3 — KedaController
+#   4 — Deployment, Service, Route, Secret token
+#   5 — ServiceMonitor, TriggerAuthentication
+#   6 — ScaledObject
+#  20 — GrafanaDashboard
 ---
 apiVersion: v1
 kind: Namespace
 metadata:
   name: openshift-keda
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
 ---
 apiVersion: operators.coreos.com/v1
 kind: OperatorGroup
 metadata:
   name: openshift-custom-metrics-autoscaler-operator
   namespace: openshift-keda
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
 spec:
   targetNamespaces:
     - openshift-keda
@@ -20,6 +34,8 @@ kind: Subscription
 metadata:
   name: openshift-custom-metrics-autoscaler-operator
   namespace: openshift-keda
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
 spec:
   channel: stable
   installPlanApproval: Automatic
@@ -32,6 +48,8 @@ kind: KedaController
 metadata:
   name: keda
   namespace: openshift-keda
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
 spec:
   admissionWebhooks:
     logEncoder: console

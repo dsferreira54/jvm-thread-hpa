@@ -12,11 +12,15 @@ kind: ServiceAccount
 metadata:
   name: keda-prometheus
   namespace: jvm-stress-app
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: jvm-stress-app-keda-prometheus-monitoring
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -32,6 +36,7 @@ metadata:
   name: keda-prometheus-token
   namespace: jvm-stress-app
   annotations:
+    argocd.argoproj.io/sync-wave: "4"
     kubernetes.io/service-account.name: keda-prometheus
 type: kubernetes.io/service-account-token
 ---
@@ -40,6 +45,8 @@ kind: TriggerAuthentication
 metadata:
   name: keda-prometheus-auth
   namespace: jvm-stress-app
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
 spec:
   secretTargetRef:
     - parameter: bearerToken
@@ -53,6 +60,8 @@ metadata:
   namespace: jvm-stress-app
   labels:
     app: jvm-stress-app
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
