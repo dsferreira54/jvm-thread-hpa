@@ -1,0 +1,131 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: jvm-stress-app
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: jvm-stress-app
+  labels:
+    app: jvm-stress-app
+spec:
+  lookupPolicy:
+    local: false
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: jvm-stress-app
+  labels:
+    app: jvm-stress-app
+spec:
+  source:
+    type: Git
+    git:
+      uri: https://github.com/dsferreira54/jvm-stress-lab.git
+      ref: main
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: jvm-stress-app:latest
+  triggers:
+    - type: ConfigChange
+  successfulBuildsHistoryLimit: 5
+  failedBuildsHistoryLimit: 5
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jvm-stress-app
+  labels:
+    app: jvm-stress-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jvm-stress-app
+  template:
+    metadata:
+      labels:
+        app: jvm-stress-app
+    spec:
+      containers:
+        - name: jvm-stress-app
+          image: image-registry.openshift-image-registry.svc:5000/jvm-stress-app/jvm-stress-app:latest
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: metrics
+              containerPort: 8081
+              protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jvm-stress-app
+  labels:
+    app: jvm-stress-app
+spec:
+  type: ClusterIP
+  selector:
+    app: jvm-stress-app
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+    - name: metrics
+      port: 8081
+      targetPort: metrics
+      protocol: TCP
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: jvm-stress-app
+  labels:
+    app: jvm-stress-app
+spec:
+  to:
+    kind: Service
+    name: jvm-stress-app
+  port:
+    targetPort: http
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: jvm-stress-app
+  labels:
+    app: jvm-stress-app
+spec:
+  selector:
+    matchLabels:
+      app: jvm-stress-app
+  endpoints:
+    - port: metrics
+      path: /actuator/prometheus
+      interval: 15s
+      scrapeTimeout: 10s
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDashboard
+metadata:
+  name: jvm-micrometer
+  namespace: grafana
+spec:
+  instanceSelector:
+    matchLabels:
+      dashboards: grafana
+  datasources:
+    - inputName: DS_PROMETHEUS
+      datasourceName: Prometheus
+  grafanaCom:
+    id: 4701

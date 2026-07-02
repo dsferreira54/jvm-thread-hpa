@@ -66,7 +66,7 @@ spec:
   source:
     repoURL: ${REPO_URL}
     targetRevision: ${REPO_CURRENT_BRANCH}
-    path: chart
+    path: raw
     helm: {}
   destination:
     server: https://kubernetes.default.svc
