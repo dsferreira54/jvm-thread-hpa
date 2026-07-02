@@ -24,6 +24,59 @@ done
 
 echo "ArgoCD openshift-gitops is Available."
 
+oc apply -f - <<'EOF'
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: openshift-keda
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: openshift-custom-metrics-autoscaler-operator
+  namespace: openshift-keda
+spec:
+  targetNamespaces:
+    - openshift-keda
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: openshift-custom-metrics-autoscaler-operator
+  namespace: openshift-keda
+spec:
+  channel: stable
+  installPlanApproval: Automatic
+  name: openshift-custom-metrics-autoscaler-operator
+  source: redhat-operators
+  sourceNamespace: openshift-marketplace
+---
+apiVersion: keda.sh/v1alpha1
+kind: KedaController
+metadata:
+  name: keda
+  namespace: openshift-keda
+spec:
+  admissionWebhooks:
+    logEncoder: console
+    logLevel: info
+  metricsServer:
+    logLevel: "0"
+  operator:
+    logEncoder: console
+    logLevel: info
+  watchNamespace: ""
+EOF
+
+echo "Waiting for KEDA operator to become ready..."
+
+until oc -n openshift-keda get deployment keda-operator \
+  -o jsonpath='{.status.availableReplicas}' 2>/dev/null | grep -q '^1'; do
+  sleep 10
+done
+
+echo "KEDA operator is ready."
+
 oc patch argocd openshift-gitops \
   -n openshift-gitops \
   --type merge \
@@ -70,7 +123,7 @@ spec:
     helm: {}
   destination:
     server: https://kubernetes.default.svc
-    namespace: ${REPO_NAME}
+    namespace: jvm-stress-app
   syncPolicy:
     automated:
       prune: true
@@ -78,4 +131,5 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - ApplyOutOfSyncOnly=true
+      - SkipDryRunOnMissingResource=true
 EOF

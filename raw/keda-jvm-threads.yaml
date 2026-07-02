@@ -1,0 +1,99 @@
+# KEDA ScaledObject — escala jvm-stress-app pela métrica jvm_threads_live_threads.
+# Pré-requisitos: KEDA instalado (keda-operator.yaml), UWM habilitado e
+# ServiceMonitor coletando /actuator/prometheus.
+#
+# Validar:
+#   oc -n jvm-stress-app get scaledobject jvm-stress-app
+#   oc -n jvm-stress-app get hpa keda-hpa-jvm-stress-app -w
+#   oc -n jvm-stress-app get pods -l app=jvm-stress-app -w
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: keda-prometheus
+  namespace: jvm-stress-app
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: jvm-stress-app-keda-prometheus-monitoring
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-monitoring-view
+subjects:
+  - kind: ServiceAccount
+    name: keda-prometheus
+    namespace: jvm-stress-app
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: keda-prometheus-token
+  namespace: jvm-stress-app
+  annotations:
+    kubernetes.io/service-account.name: keda-prometheus
+type: kubernetes.io/service-account-token
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: keda-prometheus-auth
+  namespace: jvm-stress-app
+spec:
+  secretTargetRef:
+    - parameter: bearerToken
+      name: keda-prometheus-token
+      key: token
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: jvm-stress-app
+  namespace: jvm-stress-app
+  labels:
+    app: jvm-stress-app
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: jvm-stress-app
+  pollingInterval: 15
+  cooldownPeriod: 60
+  minReplicaCount: 1
+  maxReplicaCount: 6
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 30
+          selectPolicy: Max
+          policies:
+            - type: Percent
+              value: 100
+              periodSeconds: 30
+            - type: Pods
+              value: 2
+              periodSeconds: 30
+        scaleDown:
+          stabilizationWindowSeconds: 300
+          selectPolicy: Max
+          policies:
+            - type: Pods
+              value: 1
+              periodSeconds: 60
+  triggers:
+    - type: prometheus
+      authenticationRef:
+        name: keda-prometheus-auth
+      metadata:
+        serverAddress: https://thanos-querier.openshift-monitoring.svc:9091
+        namespace: jvm-stress-app
+        authModes: bearer
+        unsafeSsl: "true"
+        metricName: jvm_threads_live
+        # KEDA divide o resultado pelo número de réplicas (AverageValue).
+        # Total de threads / réplicas = média de threads por pod.
+        query: sum(jvm_threads_live_threads{namespace="jvm-stress-app"})
+        threshold: "40"
+        activationThreshold: "25"
